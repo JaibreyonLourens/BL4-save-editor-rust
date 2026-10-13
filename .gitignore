@@ -1,0 +1,8 @@
+/target/
+/.reference/
+/docs/internal/
+/fixtures/private/*
+!/fixtures/private/README.md
+*.sav
+*.bak
+*.tmp

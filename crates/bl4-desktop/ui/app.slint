@@ -1,0 +1,90 @@
+import { Button, LineEdit, ScrollView, VerticalBox, HorizontalBox } from "std-widgets.slint";
+
+export struct ItemRow {
+    name: string,
+    family: string,
+    level: int,
+    description: string,
+}
+
+export component AppWindow inherits Window {
+    title: "Borderlands 4 Save Editor — Development shell";
+    preferred-width: 1040px;
+    preferred-height: 700px;
+    min-width: 760px;
+    min-height: 520px;
+    in property <[ItemRow]> items;
+    in-out property <int> selected-index: -1;
+    private property <bool> inventory-page: false;
+    callback search-changed(string);
+
+    VerticalBox {
+        padding: 20px;
+        spacing: 16px;
+        Text { text: "BORDERLANDS 4 / SAVE EDITOR"; font-size: 24px; font-weight: 700; }
+        HorizontalBox {
+            Button { text: "Open"; enabled: false; }
+            Button { text: "Save As"; enabled: false; }
+            Button { text: "Save"; enabled: false; }
+            Text { text: "No save loaded  ·  Demo mode"; horizontal-stretch: 1; vertical-alignment: center; }
+        }
+        Text {
+            text: "Development shell — save loading and editing are not implemented yet.";
+            wrap: word-wrap;
+        }
+        HorizontalBox {
+            spacing: 24px;
+            VerticalBox {
+                max-width: 160px;
+                Button { text: "Character"; clicked => { root.inventory-page = false; } }
+                Button { text: "Inventory"; clicked => { root.inventory-page = true; } }
+                Rectangle { vertical-stretch: 1; }
+            }
+            if !root.inventory-page: VerticalBox {
+                Text { text: "Character"; font-size: 22px; font-weight: 700; }
+                Text { text: "Open a supported character save to inspect its details."; wrap: word-wrap; }
+                Text { text: "Character name"; }
+                LineEdit { text: "No character loaded"; enabled: false; }
+                Text { text: "Cash / Eridium"; }
+                LineEdit { text: "Unavailable"; enabled: false; }
+                Text { text: "Pending changes: none"; }
+                Rectangle { vertical-stretch: 1; }
+            }
+            if root.inventory-page: HorizontalBox {
+                spacing: 20px;
+                VerticalBox {
+                    horizontal-stretch: 1;
+                    Text { text: "Inventory preview"; font-size: 22px; font-weight: 700; }
+                    LineEdit {
+                        placeholder-text: "Search demo items or families";
+                        edited(value) => { root.search-changed(value); }
+                    }
+                    ScrollView {
+                        VerticalBox {
+                            for item[index] in root.items: Button {
+                                text: item.name + "  /  Lv. " + item.level;
+                                clicked => { root.selected-index = index; }
+                            }
+                            if root.items.length == 0: Text { text: "No matching demo items"; }
+                            Rectangle { vertical-stretch: 1; }
+                        }
+                    }
+                }
+                VerticalBox {
+                    horizontal-stretch: 1;
+                    Text { text: "Item details"; font-size: 22px; font-weight: 700; }
+                    if root.selected-index < 0: Text { text: "Select a demo item to inspect it."; wrap: word-wrap; }
+                    if root.selected-index >= 0: VerticalBox {
+                        Text { text: root.items[root.selected-index].name; font-weight: 700; wrap: word-wrap; }
+                        Text { text: "Family: " + root.items[root.selected-index].family; }
+                        Text { text: "Level: " + root.items[root.selected-index].level; }
+                        Text { text: root.items[root.selected-index].description; wrap: word-wrap; }
+                        Button { text: "Apply changes"; enabled: false; }
+                    }
+                    Rectangle { vertical-stretch: 1; }
+                }
+            }
+        }
+        Text { text: "Offline desktop application  ·  M0 workspace and layout preview"; font-size: 12px; }
+    }
+}

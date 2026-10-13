@@ -426,6 +426,10 @@ fn encrypt_blocks(padded: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, ContainerErr
 }
 
 #[cfg(test)]
+#[path = "container_encoding_tests.rs"]
+mod encoding_tests;
+
+#[cfg(test)]
 mod tests {
     use std::{env, fs, io::Write};
 

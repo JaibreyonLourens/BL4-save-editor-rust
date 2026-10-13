@@ -1,9 +1,9 @@
 # Borderlands 4 Rust Save Editor
 
-Windows desktop project following [the development plan](Borderlands4-Rust-Development-Plan.md).
-The current implementation is an M0 application shell: Character and Inventory
-screens, synthetic item selection/search, and a separate GUI-free core crate.
-Opening, decoding, editing and writing actual saves are not implemented.
+Windows desktop project for inspecting and editing Borderlands 4 save files.
+The current implementation includes a Character and Inventory shell with synthetic
+data, plus a GUI-free core crate that validates and decodes Steam save containers.
+YAML editing, encoding and save-file writing are still in progress.
 
 ## Start on Windows
 
@@ -32,14 +32,19 @@ blocks PowerShell scripts by default; they do not change your system policy.
 
 - `crates/bl4-core`: presentation-neutral types; future container/document/edit APIs.
 - `crates/bl4-desktop`: Slint UI and Rust presentation wiring.
-- `resources/manifest.json`: pinned upstream provenance and future resource imports.
+- `resources/manifest.json`: local resource inventory and future imports.
 - `fixtures/private`: ignored local compatibility samples.
 - `docs/setup-status.md`: verification results and remaining milestone gates.
 
-Next: BL4-004 format contract and synthetic fixtures, then BL4-005 through BL4-008
-for key derivation, decoding, preservation and forced round trips. Keep real saves
-local and use copies for compatibility checks. Save-writing controls remain disabled
-until their validation gates pass.
+Next: implement encoding and synthetic round-trip fixtures, then document parsing,
+editing and controlled save-file writing. Keep real saves local and use copies for
+compatibility checks. Save-writing controls remain disabled until their validation
+gates pass.
 
-Licensed under AGPL-3.0-only; see [LICENSE](LICENSE) and
-[third-party notices](THIRD_PARTY_NOTICES.md).
+Start implementation with the [implementation guide](docs/implementation-guide.md).
+It provides the ordered tickets, prerequisites and proposed core responsibilities.
+Use its [fixture specification](docs/fixture-specification.md),
+[format contract](docs/format-contract.md) and
+[validation checklist](docs/validation-checklist.md) for the required evidence.
+
+Licensed under AGPL-3.0-only; see [LICENSE](LICENSE).

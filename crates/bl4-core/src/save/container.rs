@@ -1,10 +1,10 @@
-//! Encrypted save-container decoding.
+//! Encrypted save-container decoding and encoding.
 //!
-//! The decode steps are implemented, but their synthetic format fixtures and
-//! genuine-save compatibility validation are still pending.
+//! Container operations preserve exact YAML bytes. Document parsing and filesystem
+//! persistence belong to higher layers.
 use aes::Aes256;
-use aes::cipher::{Array, BlockCipherDecrypt, KeyInit};
-use flate2::{Decompress, FlushDecompress, Status};
+use aes::cipher::{Array, BlockCipherDecrypt, BlockCipherEncrypt, KeyInit};
+use flate2::{Compress, Compression, Decompress, FlushCompress, FlushDecompress, Status};
 /// Key material for the supported save-container format.
 const PUBLIC_KEY: [u8; 32] = [
     0x35, 0xEC, 0x33, 0x77, 0xF3, 0x5D, 0xB0, 0xEA, 0xBE, 0x6B, 0x83, 0x11, 0x54, 0x03, 0xEB, 0xFB,
@@ -156,12 +156,12 @@ pub fn decode(
     })
 }
 
-/// TODO (BL4-008): Reconstruct a validated container from exact YAML bytes.
+/// Reconstruct a container from exact YAML bytes.
 /// File writing, backups and source replacement belong to later modules.
 pub fn encode(yaml_bytes: &[u8], context: &ContainerContext) -> Result<Vec<u8>, ContainerError> {
     let key = derive_key(context)?;
     let mut payload = compress_zlib(yaml_bytes)?;
-    payload.extend_from_slice(&build_trailer(yaml_bytes, context.platform)?);
+    payload.extend_from_slice(&build_trailer(yaml_bytes)?);
     let padded = apply_pkcs7_padding(payload)?;
     encrypt_blocks(&padded, &key)
 }
@@ -336,28 +336,93 @@ fn verify_integrity(yaml_bytes: &[u8], trailer: Trailer) -> Result<(), Container
     Ok(())
 }
 
-/// TODO (BL4-008): Compress the exact YAML bytes as one zlib stream.
+/// Compress the exact YAML bytes as one complete level-9 zlib stream.
 fn compress_zlib(yaml_bytes: &[u8]) -> Result<Vec<u8>, ContainerError> {
-    let _ = yaml_bytes;
-    Err(ContainerError::NotImplemented("zlib compression"))
+    if yaml_bytes.len() > MAX_DECOMPRESSED_SIZE {
+        return Err(ContainerError::DecompressedDataTooLarge(
+            "YAML bytes exceed maximum allowed size",
+        ));
+    }
+
+    let mut compressor = Compress::new(Compression::best(), true);
+    let mut compressed = Vec::new();
+    loop {
+        let mut output_chunk = [0u8; DECOMPRESSION_CHUNK_SIZE];
+        let input_start = compressor.total_in();
+        let output_start = compressor.total_out();
+        let flush = if compressor.total_in() as usize == yaml_bytes.len() {
+            FlushCompress::Finish
+        } else {
+            FlushCompress::None
+        };
+        let status = compressor
+            .compress(
+                &yaml_bytes[compressor.total_in() as usize..],
+                &mut output_chunk,
+                flush,
+            )
+            .map_err(|_| ContainerError::InvalidCompression("Zlib compression failed"))?;
+        let bytes_consumed = compressor.total_in() - input_start;
+        let bytes_written = (compressor.total_out() - output_start) as usize;
+        compressed.extend_from_slice(&output_chunk[..bytes_written]);
+        match status {
+            Status::StreamEnd => return Ok(compressed),
+            Status::Ok | Status::BufError => {
+                if bytes_consumed == 0 && bytes_written == 0 {
+                    return Err(ContainerError::InvalidCompression(
+                        "Zlib compression made no progress",
+                    ));
+                }
+            }
+        }
+    }
 }
 
-/// TODO (BL4-008): Encode checksum and byte length; reject unrepresentable sizes.
-fn build_trailer(yaml_bytes: &[u8], platform: Platform) -> Result<[u8; 8], ContainerError> {
-    let _ = (yaml_bytes, platform);
-    Err(ContainerError::NotImplemented("trailer construction"))
+/// Encode the uncompressed YAML byte length after a complete zlib stream.
+fn build_trailer(yaml_bytes: &[u8]) -> Result<[u8; 4], ContainerError> {
+    let uncompressed_len = u32::try_from(yaml_bytes.len()).map_err(|_| {
+        ContainerError::InvalidTrailerLength("YAML byte length does not fit in a 32-bit field")
+    })?;
+
+    Ok(uncompressed_len.to_le_bytes())
 }
 
-/// TODO (BL4-008): Include a full block when the input is already aligned.
+/// Apply PKCS#7 padding, including a full block when the input is already aligned.
 fn apply_pkcs7_padding(payload: Vec<u8>) -> Result<Vec<u8>, ContainerError> {
-    let _ = payload;
-    Err(ContainerError::NotImplemented("PKCS#7 padding"))
+    let padding_length = 16 - (payload.len() % 16);
+    let mut padded = payload;
+    padded.extend(std::iter::repeat_n(padding_length as u8, padding_length));
+    Ok(padded)
 }
 
-/// TODO (BL4-008): AES-256-ECB encryption after padding.
+/// Encrypt bounded, block-aligned input using AES-256-ECB after padding.
 fn encrypt_blocks(padded: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, ContainerError> {
-    let _ = (padded, key);
-    Err(ContainerError::NotImplemented("AES encryption"))
+    if !padded.len().is_multiple_of(16) {
+        return Err(ContainerError::InvalidCiphertext(
+            "Padded data length is not a multiple of 16 bytes",
+        ));
+    }
+
+    if padded.is_empty() {
+        return Err(ContainerError::InvalidCiphertext("Padded data is empty"));
+    }
+
+    if padded.len() > MAX_CIPHERTEXT_SIZE {
+        return Err(ContainerError::InvalidCiphertext(
+            "Padded data exceeds the maximum supported size",
+        ));
+    }
+
+    let cipher = Aes256::new(&(*key).into());
+
+    let mut ciphertext = Vec::with_capacity(padded.len());
+    for chunk in padded.as_chunks::<16>().0 {
+        let mut block = Array::from([0u8; 16]);
+        block.copy_from_slice(chunk);
+        cipher.encrypt_block(&mut block);
+        ciphertext.extend_from_slice(&block);
+    }
+    Ok(ciphertext)
 }
 
 #[cfg(test)]
@@ -368,8 +433,8 @@ mod tests {
 
     use super::{
         ContainerContext, ContainerError, DECOMPRESSION_CHUNK_SIZE, MAX_CIPHERTEXT_SIZE, Platform,
-        Trailer, decompress_zlib, decrypt_blocks, derive_key, remove_pkcs7_padding, split_trailer,
-        validate_user_id_format, verify_integrity,
+        Trailer, build_trailer, compress_zlib, decompress_zlib, decrypt_blocks, derive_key,
+        remove_pkcs7_padding, split_trailer, validate_user_id_format, verify_integrity,
     };
 
     fn zlib_bytes(input: &[u8]) -> Vec<u8> {
@@ -491,6 +556,11 @@ mod tests {
     }
 
     #[test]
+    fn builds_a_little_endian_yaml_length_field() {
+        assert_eq!(build_trailer(b"hello"), Ok([5, 0, 0, 0]));
+    }
+
+    #[test]
     fn rejects_a_missing_trailer() {
         assert!(matches!(
             split_trailer(&[0; 7]),
@@ -502,6 +572,14 @@ mod tests {
     fn decompresses_one_complete_zlib_stream() {
         let yaml = b"name: Vault Hunter\nlevel: 12\n";
         assert_eq!(decompress_zlib(&zlib_bytes(yaml)).unwrap(), yaml);
+    }
+
+    #[test]
+    fn compresses_a_zlib_stream_that_the_decoder_accepts() {
+        let yaml = b"name: Vault Hunter\nlevel: 12\n";
+        let compressed = compress_zlib(yaml).expect("compress test YAML");
+
+        assert_eq!(decompress_zlib(&compressed).unwrap(), yaml);
     }
 
     #[test]

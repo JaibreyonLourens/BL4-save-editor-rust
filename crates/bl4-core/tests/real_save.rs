@@ -7,7 +7,10 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use bl4_core::save::container::{ContainerContext, Platform, decode, encode};
+use bl4_core::save::{
+    container::{ContainerContext, Platform, decode, encode},
+    session::SaveSession,
+};
 
 #[test]
 #[ignore = "requires a private Borderlands 4 Steam save"]
@@ -169,6 +172,56 @@ fn decodes_and_reencodes_private_steam_save() {
     results.check("platform_identical", decoded.platform == original.platform);
 
     // Ciphertext equality is informational: compression can legitimately differ.
+    let current_source = results.step("reread_source_save", fs::read(&save_path));
+    results.check("source_file_unchanged", current_source == source);
+    results.record("status=passed");
+}
+
+#[test]
+#[ignore = "requires private Steam save and ID; writes ignored test artifacts"]
+fn reconstructs_private_steam_session() {
+    let save_path = env::var("BL4_SAVE_PATH").expect("Set BL4_SAVE_PATH to a copied save file");
+    let context = private_steam_context();
+    let mut results = Results::new("session-reconstruct-save");
+    let source = results.step("read_source_save", fs::read(&save_path));
+    results.save("source.sav", &source);
+
+    let session = results.step(
+        "open_source_session",
+        SaveSession::open(source.clone(), context.clone()),
+    );
+    results.check(
+        "unchanged_ciphertext_exact",
+        session.unchanged_ciphertext() == Some(source.as_slice()),
+    );
+
+    let serialized = results.step(
+        "serialize_source_document",
+        session.working_document().to_yaml_bytes(),
+    );
+    results.save("serialized.yaml", &serialized);
+
+    // The snapshot has no original ciphertext, so this forces YAML serialization
+    // and container reconstruction rather than taking the unchanged-byte path.
+    let rebuilt = results.step("reconstruct_snapshot", session.snapshot().reconstruct());
+    results.save("session-reconstructed.sav", &rebuilt);
+    results.record(&format!("ciphertext_bytes_identical={}", source == rebuilt));
+
+    let reopened = results.step(
+        "open_reconstructed_session",
+        SaveSession::open(rebuilt, context),
+    );
+    results.check(
+        "complete_document_tree_identical",
+        reopened.working_document() == session.working_document(),
+    );
+
+    let reopened_yaml = results.step(
+        "serialize_reopened_document",
+        reopened.working_document().to_yaml_bytes(),
+    );
+    results.save("reopened.yaml", &reopened_yaml);
+
     let current_source = results.step("reread_source_save", fs::read(&save_path));
     results.check("source_file_unchanged", current_source == source);
     results.record("status=passed");

@@ -1,5 +1,33 @@
 {
   "manifest_version": 1,
-  "resources": [],
-  "note": "No catalogs or artwork have been imported. Record the origin path, revision, schema, conversions, license and SHA-256 for each future import."
+  "resources": [
+    {
+      "path": "crates/bl4-core/src/save/item_catalog_data.rs",
+      "source": "https://github.com/superexboom/Borderlands4-SaveEditor",
+      "revision": "d47f5898c4c9ea1b8722098363330eae623c7d9e",
+      "schema": "RootRecord and PartRecord; optional English name, category, internal identifier, naming role, rarity and unique-accessory flag",
+      "conversion": "AST literal ID_MAP; numeric part_refs merged with English weapon CSV by root and part ID; name-index titles and naming roles retained",
+      "license": "AGPL-3.0; see resources/catalog/LICENSE.upstream.txt",
+      "game_build": null,
+      "source_folder": "2026-09-11",
+      "roots": 71,
+      "parts": 7050,
+      "named_parts": 1021,
+      "sha256": "f72bc0094809fe867da6d3d2b42f2e58d9a67c0e8e849c3c97c8d9b691f5bf84",
+      "inputs": [
+        {
+          "path": "core/lookup.py",
+          "sha256": "13bdc17aab7d6be22bdc70005ff7f2f92f283f18675dc608027a8a9b9572fda4"
+        },
+        {
+          "path": "data/item/item_name_index.json",
+          "sha256": "8c408ffb2426787ed32572fbfbb6dcc7c337011da87bc5bb0092d011236ce6b2"
+        },
+        {
+          "path": "data/weapon/all_weapon_part_EN.csv",
+          "sha256": "4dfc4ba07fe8ee899ca713a134ee1ef14a3873d866f339bde1d3c361e659efe8"
+        }
+      ]
+    }
+  ]
 }

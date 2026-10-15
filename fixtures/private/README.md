@@ -6,11 +6,33 @@ contents are ignored except this README.
 
 For each local sample record the game version, platform, account format and expected
 decoded output in a local note. Steam decoding has been checked with a private
-sample; encoding compatibility with an editor and the game requires separate checks.
+sample; the user confirmed both generated saves load in a compatible editor.
+In-game compatibility still requires a separate check.
 
 ## Private encoding tests
 
-Set these variables in your PowerShell session to existing copied files:
+The read-only inspection field-type check uses an existing private character YAML
+export. It asserts observed identity/name/currency/backpack types and unchanged
+source bytes without logging values:
+
+```powershell
+# Use an absolute path: Cargo runs the test from the core crate directory.
+$env:BL4_YAML_PATH = (Resolve-Path 'path/to/copied-character.yaml').Path
+cargo test -p bl4-core --test save_inspection private_character_has_the_observed_field_types --locked --offline -- --ignored
+```
+
+For profile recognition and complete YAML preservation, run this separate read-only
+check from the workspace root:
+
+```powershell
+$env:BL4_PROFILE_YAML_PATH = (Resolve-Path 'fixtures/private/profile.yaml').Path
+cargo test -p bl4-core --test save_inspection private_profile_matches_observed_shape_and_preserves_the_full_tree --locked --offline -- --ignored
+```
+
+This checks the supplied export without producing artifacts or replacing its source.
+It does not establish encrypted-profile or in-game compatibility.
+
+For container tests, set:
 
 ```powershell
 $env:BL4_STEAM_ID = "your Steam ID"
@@ -30,6 +52,13 @@ Decode a copied save, force encoding from its exact YAML bytes, then decode agai
 cargo test -p bl4-core --test real_save decodes_and_reencodes_private_steam_save -- --ignored --nocapture
 ```
 
+Force the complete session path through YAML parse, serialization and container
+reconstruction, then compare the reopened semantic document tree:
+
+```powershell
+cargo test -p bl4-core --test real_save reconstructs_private_steam_session -- --ignored --nocapture
+```
+
 Each test prints its results directory under `fixtures/private/test-results/`.
 Each run uses a new directory and preserves artifacts produced before a failure.
 
@@ -37,6 +66,7 @@ Each run uses a new directory and preserves artifacts produced before a failure.
 | --- | --- |
 | Encode exported YAML | `source.yaml`, `encoded.sav`, `decoded.yaml`, `results.txt` |
 | Decode and re-encode save | `source.sav`, `source.yaml`, `reencoded.sav`, `redecoded.yaml`, `results.txt` |
+| Session reconstruction | `source.sav`, `serialized.yaml`, `session-reconstructed.sav`, `reopened.yaml`, `results.txt` |
 
 Reports contain byte counts, validation results and source-preservation checks.
 Account IDs and save contents are not logged. Generated artifacts are private and

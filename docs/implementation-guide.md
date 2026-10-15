@@ -1,18 +1,22 @@
 # Implementation guide: from the shell to real save inspection
 
-Prepared: 12 October 2026. This is an implementation handoff, not a record of
-completed codec work. Start here, then use the linked specifications while working.
+Updated: 15 October 2026. Read [project status](setup-status.md) for current
+implementation and evidence, then use this guide for the remaining milestones.
 
 ## Current starting point
 
-The workspace and Slint shell exist. The inventory contains synthetic display rows.
-The core validates and decodes Steam save containers, including a private
-compatibility test. YAML parsing, document sessions and encoding are still pending.
+The workspace and read-only Slint desktop exist. The UI displays loaded character
+summaries and separate equipped/backpack groups with serial inspection and supported
+weapon base names. The core decodes and encodes containers, preserves supported YAML
+documents and retains original/working sessions. Private Steam byte round trips pass.
 The local build/check results and remaining setup checks are recorded in
 [setup status](setup-status.md).
 
-The next deliverable is a validated core that can reconstruct a save without
-changing its contents. After that, wire read-only inspection into the UI.
+The next deliverable is broader real-save/item evidence and naming coverage.
+Both encoded saves passed the user's editor check; in-game checks remain pending.
+Parser policies and preservation findings are recorded
+in [YAML preservation](yaml-preservation.md).
+The read-only UI is implemented; that does not close the game-compatibility gate.
 Keep Save and Save As disabled until the separate character-editing milestone.
 
 Read these documents in order:
@@ -28,12 +32,12 @@ Read these documents in order:
 | --- | --- | --- |
 | Rust, Windows C++ tools and SDK | Installed; shell builds locally | Use the existing workspace and development script |
 | Format research notes | Available locally | Use the established format contract and private samples |
-| Container specification | Initial observations available | Finish the unresolved decisions in the format contract |
-| Synthetic fixtures | Missing | Produce deterministic samples with independently checked expectations |
-| Real Steam character save | Not supplied | Make a private copy and record game version/account ID locally |
-| Real profile save | Not supplied | Keep a private sample for classification and preservation tests |
+| Container specification | Steam layout verified | Use the corrected zlib-plus-four-byte-length layout |
+| Synthetic fixtures | In-code vectors and round trips present | Complete the independent fixture catalog and remaining coverage |
+| Real Steam save | Private sample tested | Keep it private; record game build and classification locally |
+| Real profile save | Private YAML export verified | Encrypted profile fixture and game acceptance still needed |
 | Real Epic save | Not supplied | Synthetic codec work can proceed; genuine Epic support stays unverified |
-| Independent decoded output | Missing | Compare private samples with a separate compatible editor |
+| Independent decoded output | User confirmed exported YAML and both generated saves load in a compatible editor | Complete parse/serialize and in-game checks |
 | In-game access | Not established | Required to accept the forced round-trip gate |
 
 Keep private format research and fixtures outside version control. Do not add
@@ -60,10 +64,10 @@ The following are proposed module responsibilities, not existing APIs:
 Retain unknown content in the full tree. Summary records are views of that tree;
 they must never become the only source used for reconstruction.
 
-Add dependencies as their implementation ticket needs them. The development plan
-proposes `aes`/`ecb` for AES and padding, `flate2` for zlib, `adler2` for the trailer,
-and `thiserror` for errors. Check compatible cipher versions when adding the AES
-crates. Treat `serde_yaml_ng` as a candidate until real tag/scalar fixtures pass.
+Add dependencies as their implementation ticket needs them. The codec already uses
+`aes` 0.9.3, `flate2` 1.1.10 and `adler2` 2.0.1, with direct ECB block handling and
+PKCS#7 validation. `adler2` verifies the zlib checksum; no additional checksum is
+appended. `serde_yaml_ng` is used behind event/scanner validation and preservation tests.
 Native file dialogs such as `rfd` are needed at BL4-009, not for the codec itself.
 Update the application lockfile whenever dependencies change.
 
@@ -117,8 +121,8 @@ bytes, without requiring a GUI or YAML parser.
 
 Implement the pipeline in the [format contract](format-contract.md). Enforce size
 limits before allocations where possible, validate AES block alignment and padding,
-split the trailer, and require a complete bounded zlib stream. Compare both the
-trailer checksum and the byte length. Do not retry malformed data with relaxed
+remove only the four-byte length, and require a complete bounded zlib stream.
+Compare the zlib checksum and the byte length. Do not retry malformed data with relaxed
 padding or disabled checksums.
 
 Keep low-level diagnostics internally, but avoid claiming that every failure proves
@@ -158,10 +162,14 @@ intact without writable presentation fields.
 
 ## BL4-008: encoding and forced round-trip verification
 
+Current status: byte-level encoding, synthetic platform round trips and two private
+Steam encoding tests are implemented and pass. The remaining work below includes
+YAML parse/dump preservation and manual game compatibility. Those gates stay open.
+
 **Depends on:** BL4-006 and BL4-007. **Produces:** reconstruction through the core,
 plus compatibility evidence on a copied genuine Steam save.
 
-Encode YAML bytes, zlib-compress them, append the correctly ordered trailer, apply
+Encode YAML bytes, zlib-compress them, append only the four-byte little-endian length, apply
 PKCS#7 and encrypt. For unchanged-copy behavior, retain and return original bytes.
 Test reconstruction separately: parse, serialize, compress and encrypt even when
 the session is unchanged. Otherwise an original-byte bypass could conceal bugs.
@@ -208,7 +216,7 @@ After read-only inspection, BL4-010 adds validated name/currency commands and ve
 Save As. Before that work, document exact field paths, bounds, character/profile
 ownership and the expected changed-path set. Add same-directory temporary output,
 output verification, backups for existing destinations and external-source-change
-checks before exposing writes. The original plan remains authoritative for that gate.
+checks before exposing writes. The validation checklist defines that gate.
 
 The item codec is M5. Its research fixtures start in BL4-004, but item editing,
 equipped/backpack synchronization, slot allocation, imports and duplication must wait
@@ -231,10 +239,8 @@ Close or hand off a ticket with:
 - Remaining unknowns and whether the acceptance gate passed or is still pending.
 - The next dependent ticket that can now begin.
 
-Suggested first implementation request:
+Suggested next implementation request:
 
-> Implement the container/key portion of BL4-004 using the pinned reference and
-> these documents. Produce deterministic synthetic fixtures, independently checked
-> expected results and completed container research decisions. Preserve the current
-> application shell. Keep unresolved item formats and genuine-save compatibility
-> visibly pending, and report which BL4-005 work is ready to begin.
+> Review project status and extend read-only item naming with independent vectors.
+> Preserve unknown serials, separate weapon prefixes/equipment rules from token
+> parsing, and keep Save/Save As disabled until compatibility gates pass.

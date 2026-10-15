@@ -1,48 +1,84 @@
-# Setup status — 12 October 2026
+# Project status - 15 October 2026
 
-Implemented:
+This file records current implementation, evidence and remaining milestones.
+See the [implementation guide](implementation-guide.md) for the milestone sequence.
 
-- Cargo workspace with `bl4-core` and `bl4-desktop`; the core has no GUI dependencies.
-- Aligned Slint/slint-build 1.18.1, with a winit/software-rendered desktop window.
-- Character placeholder and searchable synthetic inventory with selectable details.
+## Implemented
+
+- Cargo workspace with a GUI-free `bl4-core` and Slint `bl4-desktop`.
+- Read-only character name/class/level/currencies and separate collapsible equipped/backpack lists.
+- Manual Open with Windows Documents discovery, editable account ID and platform choice.
+- Background file loading, retained sessions, shared inventory search and stale-request guards.
+- Bounded YAML parsing, full-tree serialization and conservative character/profile classification.
+- Item token decoding, weapon base-name resolution and fallback part descriptions.
 - Stable Rust configuration, application lockfile, Windows CI and VS Code tasks.
-- Development script that locates Rust when PATH has not refreshed.
-- Git repository initialized locally; no commit or remote created.
-- Resource manifest and AGPLv3 license.
-- Steam container decoding with strict AES, padding, zlib, checksum and length checks.
-- A private Steam save decodes to YAML accepted by a separate compatible editor.
-- Private fixture directory excluded from Git.
+- Development script for locating Rust and running workspace commands.
+- AGPLv3 license, third-party notices and a pinned catalog import (71 roots, 7,050 parts).
+- Steam/Epic account validation and AES key derivation.
+- AES-256-ECB container decoding with padding, zlib, checksum and length validation.
+- Encoding from exact YAML bytes: level-9 zlib, four-byte length, PKCS#7 and AES.
+- Specification-based encoding tests and private tests that preserve their outputs.
+- Private samples, test artifacts and internal notes excluded from Git.
 
-Local environment: Rust/Cargo 1.99.0, stable x86_64-pc-windows-msvc and Visual Studio
-Build Tools 2026 were already installed. No global toolchain or execution-policy
-changes were needed.
+## Verification
 
-Verification:
+Latest checks: 104 active core tests and 10 desktop tests pass (nine private tests
+ignored). Workspace formatting and Clippy pass. Earlier private character/profile
+inspection and production character YAML round trips passed with source unchanged;
+they were not rerun during commit preparation.
 
-- Debug desktop build passed.
-- `cargo fmt --all -- --check` passed.
-- `cargo test --workspace --locked` passed (zero tests at the shell stage).
-- `cargo clippy --workspace --all-targets --locked -- -D warnings` passed.
-- Desktop process opened a visible, responding window with the expected title.
-- Windows release build passed; executable: `target/release/bl4-desktop.exe`.
+Latest core checks passed:
 
-The Windows CI workflow is configured, but has not run on a remote clean checkout.
-Interactive keyboard navigation, selection and search still need a manual smoke
-check. No save-format or in-game compatibility is claimed.
+```powershell
+cargo fmt --all -- --check
+cargo test --workspace --locked --offline
+cargo clippy --workspace --all-targets --locked --offline -- -D warnings
+```
 
-Ticket progress:
+Private tests are ignored unless explicitly selected with the required local fixtures.
 
-| Ticket | Status |
+Both new private integration tests were run successfully on 13 October 2026:
+encoding exported YAML, and decoding/re-encoding a copied Steam save. Each recovered
+the exact 125,156 YAML bytes and confirmed the input file was unchanged. The original
+save was 21,296 bytes; the reconstructed save was 20,832 bytes. Compression output
+can differ without changing the decoded content.
+
+The user confirmed that the exported decoded YAML loads in a compatible editor.
+The user also confirmed both exact-YAML encoded saves and the production-session
+reconstructed save load in that editor. In-game acceptance remains unconfirmed.
+BL4-007 now has a bounded production document API, full-tree serialization,
+session state and a passing private parse/serialize/reconstruct/editor check; see
+[YAML preservation](yaml-preservation.md) for findings and unresolved policies.
+Profile classification and full-tree YAML preservation pass against a private
+export. Encrypted profile reconstruction and genuine Epic support remain unverified.
+
+Earlier shell checks passed a desktop debug build, workspace tests/Clippy, visible
+window startup and a Windows release build. These desktop checks were not rerun for
+the encoding commits. Remote CI and interactive UI smoke checks remain pending.
+
+## Ticket progress
+
+| Ticket | Current status |
 | --- | --- |
-| BL4-001 | Workspace/checks implemented; remote clean-checkout CI pending |
-| BL4-002 | Layout implemented and window startup checked; interactive smoke check pending |
-| BL4-003 | Reference/license/manifest recorded; catalog selection and imports deferred |
-| BL4-004 | Container notes started; serial research and synthetic fixtures pending |
+| BL4-001 | Workspace/checks implemented; remote CI pending |
+| BL4-002 | Character/inventory UI displays real saves read-only |
+| BL4-003 | Bundled catalog import, manifest hashes and license notices implemented |
+| BL4-004 | Steam layout verified; complete independent fixture catalog and item research pending |
+| BL4-005 | Account parsing/key derivation implemented; broader independent Epic vectors pending |
+| BL4-006 | Decoder implemented and tested with a private Steam save; remaining boundary/negative coverage pending |
+| BL4-007 | Document/session layer, character/profile recognition, character level/summaries and supported YAML policies implemented; broader fixture acceptance pending |
+| BL4-008 | Forced private parse/dump/re-encode and editor checks pass; in-game gate pending |
+| BL4-009 | Read-only loading, summaries, equipped/backpack grouping and search implemented; broader compatibility acceptance pending |
+| BL4-010 onward | Editing and persistence not implemented |
 
-The next implementation task is encoding with synthetic round-trip fixtures, then
-YAML document preservation. No save files are written by the application.
+## Latest commits
 
-Implementation handoff documentation is available in the
-[implementation guide](implementation-guide.md), with a detailed fixture matrix,
-expanded container contract and acceptance checklist. These documents specify work
-to do; they do not add codec code, fixtures or compatibility evidence.
+- `ece8f0b` - document parsing and desktop dialog dependencies.
+- `c83dec4` - document/session preservation and conservative save inspection.
+- `a7165dc` - bounded item serial token decoding.
+- `eec6e1c` - attributed bundled catalog and weapon base-name resolution.
+- `4e7236c` - read-only desktop character and grouped inventory inspection.
+
+Production Save/Save As controls remain disabled. See the
+[private test instructions](../fixtures/private/README.md) for reproducing tests and
+locating generated saves.

@@ -1,6 +1,7 @@
 /target/
 /.reference/
 /docs/internal/
+/docs/agent-handoff.md
 /fixtures/private/*
 !/fixtures/private/README.md
 *.sav

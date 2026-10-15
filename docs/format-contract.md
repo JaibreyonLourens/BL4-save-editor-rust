@@ -22,7 +22,7 @@ overflowing IDs.
 Before completing BL4-004:
 
 - Record the item alphabet, bit order, magic and all supported token/header forms
-  from the pinned item decoder; include capacity/truncation cases.
+  using documented format evidence; include capacity/truncation cases.
 - Generate independently checked synthetic Steam/Epic containers and expected keys,
   plaintext, checksums, lengths and malformed variants.
 - Add item examples for simple/int/list parts, string roots and short headers.
@@ -30,9 +30,11 @@ Before completing BL4-004:
   game version and account format locally.
 - Verify actual YAML tags/scalars before selecting the parser.
 
-Steam decoding is implemented and verified against one private save using a separate
-compatible editor. Synthetic fixtures, encoding, serial fixtures and in-game
-compatibility remain pending. The UI's demo rows are layout data only.
+Steam decoding and encoding are implemented. The user verified that exported YAML
+loads in a separate compatible editor. Synthetic platform round trips and private
+Steam encoding round trips pass; the user confirmed both newly encoded saves load
+in a compatible editor. In-game compatibility remains pending. Serial fixtures and the complete independent
+fixture catalog remain unfinished. The UI's demo rows are layout data only.
 
 Use the [implementation guide](implementation-guide.md),
 [fixture specification](fixture-specification.md) and
@@ -59,7 +61,9 @@ to the first 32 encoded bytes for XOR, not the first 32 characters.
 4. Require at least eight unpadded bytes. Read the checksum from the last eight
    bytes as zlib's big-endian Adler-32 and split off only the final four-byte
    little-endian length.
-5. Reject a declared output length above the configured maximum before decompression.
+5. Planned: reject a declared output length above the configured maximum before
+   decompression. The current code bounds actual output and verifies length after
+   decompression; this early rejection is still missing.
 6. Decompress the remaining complete zlib stream as one bounded stream. Enforce the maximum
    while reading output, not after reading an unlimited buffer. Do not allocate
    unchecked memory based on trailer length.
@@ -72,15 +76,20 @@ to the first 32 encoded bytes for XOR, not the first 32 characters.
    validation there without dropping invalid bytes or substituting replacement text.
 
 The Adler-32 is zlib's own checksum. The declared length counts bytes, not Unicode
-characters. The encoder uses UTF-8 and zlib level 9.
+characters. The intended document encoding is UTF-8; the container codec preserves
+its input bytes without validating text and uses zlib level 9.
 
 If platform detection is added, each candidate must pass the entire validation
 pipeline. Reject ambiguity. An explicit platform choice is sufficient initially.
-No platform-marker prefix has been established by the reference observations here.
+No platform-marker prefix has been established by the format observations here.
 Wrong account input and corrupted ciphertext can fail at the same stage; do not
 present either cause as proven by a padding or decompression failure alone.
 
 ## Required encoding and preservation behavior
+
+Byte-level encoding, full supported-document serialization and session preservation
+are implemented. Private character reconstruction now includes parse/dump/reopen
+semantic comparison; in-game acceptance remains pending.
 
 For reconstruction, serialize the full supported document as UTF-8, check its byte
 length is representable and within limits, zlib-compress it, append the
@@ -92,6 +101,44 @@ For an unchanged copy, preserve exact original ciphertext. Test forced reconstru
 separately through parse/dump/re-encode, then decrypt/reparse and compare whole
 semantic trees. Semantic equality includes scalar types, tags, unknown nodes and
 sequence order; YAML formatting and compressed-byte equality are not required.
+
+## Read-only inspection contract
+
+`SaveDocument::kind()` recognizes the observed character shape only when
+`state.char_guid` and `state.class` are nonblank strings. This is an application
+policy based on private character evidence, not universal format detection.
+Missing or unexpected identity types produce `Unknown`. The observed profile
+shape requires untagged mappings at `inputprefs`, `onlineprefs` and `domains`, with
+no `state` field. A complete profile shape combined with any `state` field is
+ambiguous and remains `Unknown`, without character summaries. Profile recognition
+is based on one private export; it does not prove support for every profile version
+or its encrypted container. Profiles expose no character summaries or edit permission.
+
+`character_summary()` returns a borrowed view only for recognized characters:
+
+| Path | Expected type | Result |
+| --- | --- | --- |
+| `state.char_name` | string | Optional name |
+| `state.class` | nonblank string | Exact class identifier |
+| `state.experience` | sequence of plain mappings | Optional level from the unique `type: Character` record with an unsigned `level` |
+| `state.currencies.cash` | unsigned integer | Optional cash |
+| `state.currencies.eridium` | unsigned integer | Optional Eridium |
+| `state.inventory.items.backpack` | mapping | Optional ordered inventory rows |
+| backpack mapping key | string | Optional slot identifier |
+| backpack entry `serial` | string | Optional exact serial text |
+
+Every ancestor must be an untagged mapping. Locally tagged fields, wrong types and
+missing fields remain unavailable; values are never coerced. Zero is an available
+currency value. Unavailable inventory differs from a known empty mapping. Every
+backpack entry remains a row, including malformed entries and non-string keys.
+Serials are not decoded, trimmed or filtered. Unknown tree nodes remain intact.
+Inspection does not change ciphertext, document content, revision or dirty state.
+Level selection is independent of sequence order and ignores other well-typed
+experience types. Duplicate `Character` records, wrong types or malformed record
+identities make level unavailable; no bounds for editing are inferred.
+No edit permission is implied by classification. Equipped pairing and flags await
+further evidence. Supported YAML tag/numeric/merge and resource policies are
+specified in [YAML preservation](yaml-preservation.md).
 
 ## Compatibility requirements
 
@@ -125,7 +172,7 @@ varint/varbit, simple/int/list parts, string roots and normal/short headers as r
 targets. Exact constants/layouts are not established by the container source used
 for these notes.
 
-Inspect the pinned `bl4_decoder_py/` sources and document:
+Investigate the item stream and document:
 
 - Alphabet, byte grouping, partial groups and invalid-character policy.
 - Bit order, magic value, token discriminators and termination/padding rules.
@@ -140,7 +187,14 @@ Keep unsupported serial strings intact. Do not guess missing rules to close a ti
 
 ## Compatibility status
 
-Synthetic platform containers, genuine Steam character/profile samples, genuine Epic
-samples and in-game round trips are pending. Update this contract with fixture IDs
-and evidence as implementation proceeds; research observations alone do not verify
-game compatibility.
+Synthetic Steam/Epic round trips and a genuine Steam byte round trip pass. A private
+Steam sample produces 125,156 YAML bytes; its ciphertext changes from 21,296 to
+20,832 bytes after reconstruction while the YAML remains identical. These checks
+alone do not prove in-game compatibility. The production session's character
+parse/serialize/reconstruct/reopen path also passes semantic comparison. Profile
+classification and full-tree YAML preservation pass against a private export;
+encrypted profile reconstruction, genuine Epic samples and in-game round trips remain
+pending. See the [agent handoff](agent-handoff.md) for code locations and test evidence.
+
+Current size policies are 16 MiB uncompressed and 32 MiB ciphertext. Broader limit
+boundary tests and independent key/container fixture coverage remain outstanding.

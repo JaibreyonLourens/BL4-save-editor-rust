@@ -1,8 +1,10 @@
 # Fixture specification
 
 Use with the [implementation guide](implementation-guide.md) and
-[format contract](format-contract.md). All cases below are required work, not
-fixtures already present in the repository.
+[format contract](format-contract.md). The matrix defines requirements; it is not
+a completed coverage record. See [the agent handoff](agent-handoff.md) for current
+in-code vectors, round trips and private-test evidence. No standalone synthetic
+fixture catalog has been completed.
 
 ## Storage and provenance
 
@@ -44,8 +46,10 @@ independent tool; decoding by another editor alone is insufficient for checksum 
 
 Build malformed fixtures so they isolate the intended validation. A random encrypted
 byte flip usually fails padding or decompression first and does not reliably test a
-trailer mismatch. To test that mismatch, build valid compressed data with a deliberately
-wrong trailer and valid padding, then encrypt it with the correct synthetic key.
+length mismatch. To test that mismatch, append a deliberately wrong four-byte
+length to a valid zlib stream, add valid padding, then encrypt with the correct
+synthetic key. Corrupting zlib's checksum should fail in zlib decompression; there
+is no separate additional checksum field.
 
 For boundary tests, use reduced configured limits and small artifacts where possible
 instead of committing large decompression payloads. Record the limit associated
@@ -61,16 +65,16 @@ with each case.
 | KEY-04 | Epic artificial ASCII ID | Expected UTF-16LE XOR result |
 | KEY-05 | Epic encoding boundary at and beyond 32 bytes | Only the first 32 encoded bytes affect the key |
 | KEY-06 | Synthetic non-ASCII Epic derivation input | Confirms UTF-16LE behavior at the primitive level; does not establish accepted real account syntax |
-| CON-01 | Valid Steam container | Exact expected YAML bytes and little-endian trailer checksum |
-| CON-02 | Valid synthetic Epic container | Exact expected YAML bytes and big-endian trailer checksum |
+| CON-01 | Valid Steam container | Exact YAML bytes, zlib big-endian checksum and four-byte little-endian length |
+| CON-02 | Valid synthetic Epic container | Same container layout with Epic-derived key; genuine Epic remains unverified |
 | CON-03 | Payload size requiring a full PKCS#7 block | Padding added and removed correctly |
 | CON-04 | Empty ciphertext or non-multiple-of-16 length | Rejected before decryption |
 | CON-05 | Padding length 0, greater than 16 or inconsistent bytes | Rejected as invalid padding |
 | CON-06 | Correctly padded decrypted content shorter than eight bytes | Rejected as missing trailer |
 | CON-07 | Truncated/invalid zlib stream with otherwise valid wrapper | Rejected during decompression |
-| CON-08 | Valid zlib stream, wrong additional Adler-32 | Rejected by checksum validation |
+| CON-08 | Corrupted zlib Adler-32 with valid length and padding | Rejected during zlib checksum validation |
 | CON-09 | Valid zlib stream/checksum, wrong length | Rejected by length validation |
-| CON-10 | Wrong checksum byte order for chosen platform | Rejected unless independently documented as a supported variant |
+| CON-10 | Zlib checksum written in little-endian order | Rejected; zlib checksum is big-endian regardless of platform |
 | CON-11 | Wrong account or platform key | Recoverable validation failure; no panic or partial session |
 | CON-12 | Encrypted input above configured maximum | Rejected before large allocation/decryption |
 | CON-13 | Decompression exceeds maximum or declared length | Stops at the enforced bound, without unbounded output |

@@ -3,9 +3,12 @@
 Use this as a completion record for the [implementation guide](implementation-guide.md).
 Unchecked items are requirements, not claims of existing behavior.
 
+Current evidence is recorded in the [agent handoff](agent-handoff.md). Passing
+byte-level tests does not close document-preservation or game-compatibility gates.
+
 ## Before accepting BL4-004
 
-- [ ] Every format claim identifies pinned reference source or genuine evidence.
+- [ ] Every format claim identifies reproducible format evidence.
 - [ ] Container/key golden results are independently checked and reproducible.
 - [ ] Positive and malformed fixtures have expected outcomes and provenance.
 - [ ] Item forms/header/encoding examples are recorded or explicitly unresolved.
@@ -27,10 +30,12 @@ Unchecked items are requirements, not claims of existing behavior.
 
 ## Before accepting BL4-008 and the M2 gate
 
-- [ ] Both synthetic platforms reconstruct into valid containers.
-- [ ] An unchanged-copy test preserves exact original encrypted bytes.
-- [ ] A separate test forces parse/dump/re-encode without the original-byte bypass.
-- [ ] Reconstructed output decrypts/reparses to the complete original semantic tree.
+- [x] Both synthetic platforms reconstruct into valid containers at the byte level.
+- [x] Private Steam YAML encoding and save reconstruction recover exact YAML bytes.
+- [x] Private encoding tests preserve their inputs and save ignored artifacts/reports.
+- [x] An unchanged-copy test preserves exact original encrypted bytes.
+- [x] A separate test forces parse/dump/re-encode without the original-byte bypass.
+- [x] Reconstructed output decrypts/reparses to the complete original semantic tree.
 - [ ] A genuine Steam forced round trip passes the private in-game check below.
 - [ ] Full core tests, formatting, Clippy and a Windows release build pass.
 - [ ] Missing evidence and unsupported variants are included in the handoff.
@@ -83,5 +88,5 @@ game build/platform and sanitized manual-test results for compatibility claims.
 Link private evidence by a non-identifying local case ID rather than exposing account
 IDs or real save contents in committed documentation.
 
-The initial checklist is entirely pending. The earlier shell build/check results are
-recorded separately in [setup status](setup-status.md).
+Only explicitly checked items are complete. Current core verification and historical
+shell checks are recorded separately in [setup status](setup-status.md).

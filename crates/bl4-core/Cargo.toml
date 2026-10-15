@@ -9,3 +9,6 @@ publish.workspace = true
 aes = "=0.9.3"
 flate2 = "=1.1.10"
 adler2 = "=2.0.1"
+serde_yaml_ng = "=0.10.0"
+yaml-rust2 = "=0.13.0"
+sha2 = "=0.11.1"

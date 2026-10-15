@@ -9,6 +9,8 @@ build = "build.rs"
 [dependencies]
 bl4-core.workspace = true
 slint.workspace = true
+rfd = "=0.17.2"
+dirs = "=6.0.0"
 
 [build-dependencies]
 slint-build.workspace = true

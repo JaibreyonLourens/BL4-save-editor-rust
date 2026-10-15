@@ -1,10 +1,18 @@
-import { Button, LineEdit, ScrollView, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { Button, CheckBox, ComboBox, LineEdit, ScrollView, VerticalBox, HorizontalBox } from "std-widgets.slint";
 
 export struct ItemRow {
     name: string,
     family: string,
-    level: int,
+    level: string,
     description: string,
+}
+
+export struct CharacterView {
+    name: string,
+    class-name: string,
+    level: string,
+    cash: string,
+    eridium: string,
 }
 
 export component AppWindow inherits Window {
@@ -15,57 +23,128 @@ export component AppWindow inherits Window {
     min-height: 520px;
     in property <[ItemRow]> items;
     in-out property <int> selected-index: -1;
-    private property <bool> inventory-page: false;
+    in-out property <bool> inventory-page: false;
+    in-out property <int> current-page: 0;
+    in property <bool> has-loaded-save: false;
+    in-out property <string> search-query;
     callback search-changed(string);
-
+    callback open-save();
+    callback load-save();
+    in-out property <string> account-id;
+    in-out property <bool> manual-account: false;
+    in-out property <int> platform-index: 0;
+    in property <[ItemRow]> equipped-items;
+    in property <bool> equipped-available: false;
+    private property <bool> equipped-expanded: true;
+    private property <bool> backpack-expanded: true;
+    private property <bool> selected-equipped: false;
+    in property <CharacterView> character: {
+        name: "No character loaded", class-name: "Unavailable",
+        level: "Unavailable", cash: "Unavailable", eridium: "Unavailable",
+    };
+    private property <ItemRow> selected-item: root.selected-equipped
+        ? root.equipped-items[root.selected-index] : root.items[root.selected-index];
+    in property <string> selected-path;
+    in property <string> status: "Choose a save to detect its account folder.";
     VerticalBox {
         padding: 20px;
         spacing: 16px;
         Text { text: "BORDERLANDS 4 / SAVE EDITOR"; font-size: 24px; font-weight: 700; }
         HorizontalBox {
-            Button { text: "Open"; enabled: false; }
+            Button { text: "Open"; enabled: true; clicked => { root.open-save(); } }
+            Button {
+                text: "Load selected save";
+                enabled: root.selected-path != "";
+                clicked => { root.load-save(); }
+            }
             Button { text: "Save As"; enabled: false; }
             Button { text: "Save"; enabled: false; }
-            Text { text: "No save loaded  ·  Demo mode"; horizontal-stretch: 1; vertical-alignment: center; }
+            Text { text: root.has-loaded-save ? "Save loaded / Read-only" : "No save loaded / Preview"; horizontal-stretch: 1; vertical-alignment: center; }
         }
         Text {
-            text: "Development shell — save loading and editing are not implemented yet.";
+            text: "Read-only save inspection. Select a file, check its account and platform, then load it.";
             wrap: word-wrap;
         }
+        HorizontalBox {
+            Text { text: "Platform"; vertical-alignment: center; }
+            ComboBox { model: ["Steam", "Epic"]; current-index <=> root.platform-index; }
+            CheckBox { text: "Use my own account ID"; checked <=> root.manual-account; }
+            LineEdit {
+                placeholder-text: "Steam or Epic account ID";
+                text <=> root.account-id;
+                edited(value) => { root.manual-account = true; }
+            }
+        }
+        Text { text: root.selected-path; wrap: word-wrap; }
+        Text { text: root.status; wrap: word-wrap; }
         HorizontalBox {
             spacing: 24px;
             VerticalBox {
                 max-width: 160px;
-                Button { text: "Character"; clicked => { root.inventory-page = false; } }
-                Button { text: "Inventory"; clicked => { root.inventory-page = true; } }
+                Button { text: "Character"; clicked => { root.current-page = 0; } }
+                Button { text: "Inventory"; clicked => { root.current-page = 1; } }
                 Rectangle { vertical-stretch: 1; }
             }
-            if !root.inventory-page: VerticalBox {
+            if root.current-page == 0: VerticalBox {
                 Text { text: "Character"; font-size: 22px; font-weight: 700; }
                 Text { text: "Open a supported character save to inspect its details."; wrap: word-wrap; }
                 Text { text: "Character name"; }
-                LineEdit { text: "No character loaded"; enabled: false; }
-                Text { text: "Cash / Eridium"; }
-                LineEdit { text: "Unavailable"; enabled: false; }
+                LineEdit {
+                    text: root.character.name;
+                    enabled: false;
+                }
+                Text { text: "Class: " + root.character.class-name; wrap: word-wrap; }
+                Text { text: "Level: " + root.character.level; }
+                Text { text: "Cash"; }
+                LineEdit { text: root.character.cash; enabled: false; }
+                Text { text: "Eridium"; }
+                LineEdit { text: root.character.eridium; enabled: false; }
                 Text { text: "Pending changes: none"; }
                 Rectangle { vertical-stretch: 1; }
             }
-            if root.inventory-page: HorizontalBox {
+            if root.current-page == 1: HorizontalBox {
                 spacing: 20px;
                 VerticalBox {
                     horizontal-stretch: 1;
-                    Text { text: "Inventory preview"; font-size: 22px; font-weight: 700; }
+                    Text { text: root.has-loaded-save ? "Inventory" : "Inventory preview"; font-size: 22px; font-weight: 700; }
                     LineEdit {
-                        placeholder-text: "Search demo items or families";
+                        placeholder-text: "Search items or types";
+                        text <=> root.search-query;
                         edited(value) => { root.search-changed(value); }
                     }
                     ScrollView {
                         VerticalBox {
-                            for item[index] in root.items: Button {
-                                text: item.name + "  /  Lv. " + item.level;
-                                clicked => { root.selected-index = index; }
+                            Button {
+                                text: (root.equipped-expanded ? "▼ Equipped" : "▶ Equipped") + " (" + root.equipped-items.length + ")";
+                                clicked => { root.equipped-expanded = !root.equipped-expanded; }
                             }
-                            if root.items.length == 0: Text { text: "No matching demo items"; }
+                            if root.equipped-expanded: VerticalBox {
+                                for item[index] in root.equipped-items: Button {
+                                    text: item.name + "  /  Level candidate: " + item.level;
+                                    clicked => {
+                                        root.selected-equipped = true;
+                                        root.selected-index = index;
+                                    }
+                                }
+                                if root.equipped-items.length == 0: Text {
+                                    text: root.equipped-available ? "No equipped items to display. Check the search." : "Equipped inventory is unavailable in this save.";
+                                    wrap: word-wrap;
+                                }
+                            }
+                            Button {
+                                text: (root.backpack-expanded ? "▼ Backpack" : "▶ Backpack") + " (" + root.items.length + ")";
+                                clicked => { root.backpack-expanded = !root.backpack-expanded; }
+                            }
+                            if root.backpack-expanded: VerticalBox {
+                                for item[index] in root.items: Button {
+                                    text: item.name + "  /  Level candidate: " + item.level;
+                                    clicked => {
+                                        root.selected-equipped = false;
+                                        root.selected-index = index;
+                                    }
+                                }
+                                if root.items.length == 0: Text { text: "No items to display. Check the load status or search."; wrap: word-wrap; }
+                            }
                             Rectangle { vertical-stretch: 1; }
                         }
                     }
@@ -73,12 +152,12 @@ export component AppWindow inherits Window {
                 VerticalBox {
                     horizontal-stretch: 1;
                     Text { text: "Item details"; font-size: 22px; font-weight: 700; }
-                    if root.selected-index < 0: Text { text: "Select a demo item to inspect it."; wrap: word-wrap; }
+                    if root.selected-index < 0: Text { text: "Select an item to inspect its serial and parts."; wrap: word-wrap; }
                     if root.selected-index >= 0: VerticalBox {
-                        Text { text: root.items[root.selected-index].name; font-weight: 700; wrap: word-wrap; }
-                        Text { text: "Family: " + root.items[root.selected-index].family; }
-                        Text { text: "Level: " + root.items[root.selected-index].level; }
-                        Text { text: root.items[root.selected-index].description; wrap: word-wrap; }
+                        Text { text: root.selected-item.name; font-weight: 700; wrap: word-wrap; }
+                        Text { text: "Family: " + root.selected-item.family; }
+                        Text { text: "Level candidate: " + root.selected-item.level; }
+                        Text { text: root.selected-item.description; wrap: word-wrap; }
                         Button { text: "Apply changes"; enabled: false; }
                     }
                     Rectangle { vertical-stretch: 1; }
